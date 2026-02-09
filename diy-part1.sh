@@ -1,5 +1,7 @@
 #!/bin/bash
 #
+# 添加 OpenClash 源
+echo 'src-git openclash https://github.com/vernesong/OpenClash.git' >> feeds.conf.default
 # https://github.com/P3TERX/Actions-OpenWrt
 # File name: diy-part1.sh
 # Description: OpenWrt DIY script part 1 (Before Update feeds)
