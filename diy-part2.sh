@@ -3,7 +3,7 @@
 # 1. 创建内核设备树目录
 mkdir -p target/linux/rockchip/files/arch/arm64/boot/dts/rockchip/
 
-# 2. 写入 Seewo SV21 专属设备树 (增加完整 OPP 频率表，确保 2.0GHz 跑满)
+# 2. 写入 Seewo SV21 专属设备树 (补全了缺失的 mdio 节点)
 cat <<EOF > target/linux/rockchip/files/arch/arm64/boot/dts/rockchip/rk3568-seewo-sv21.dts
 // SPDX-License-Identifier: (GPL-2.0+ OR MIT)
 /dts-v1/;
@@ -28,7 +28,6 @@ cat <<EOF > target/linux/rockchip/files/arch/arm64/boot/dts/rockchip/rk3568-seew
 		stdout-path = "serial2:1500000n8";
 	};
 
-	/* 强制定义频率表，防止内核锁频 */
 	cpu0_opp_table: opp-table-0 {
 		compatible = "operating-points-v2";
 		opp-shared;
@@ -45,22 +44,12 @@ cat <<EOF > target/linux/rockchip/files/arch/arm64/boot/dts/rockchip/rk3568-seew
 
 	vcc12v_dcin: vcc12v-dcin {
 		compatible = "regulator-fixed";
-		regulator-name = "vcc12v_dcin";
 		regulator-always-on;
 		regulator-boot-on;
-	};
-
-	vcc3v3_sys: vcc3v3-sys {
-		compatible = "regulator-fixed";
-		regulator-name = "vcc3v3_sys";
-		regulator-always-on;
-		regulator-boot-on;
-		vin-supply = <&vcc12v_dcin>;
 	};
 
 	vcc5v0_sys: vcc5v0-sys {
 		compatible = "regulator-fixed";
-		regulator-name = "vcc5v0_sys";
 		regulator-always-on;
 		regulator-boot-on;
 		vin-supply = <&vcc12v_dcin>;
@@ -82,7 +71,6 @@ cat <<EOF > target/linux/rockchip/files/arch/arm64/boot/dts/rockchip/rk3568-seew
 	pinctrl-0 = <&gmac1m1_miim &gmac1m1_tx_bus2 &gmac1m1_rx_bus2 &gmac1m1_rgmii_clk &gmac1m1_rgmii_bus>;
 	snps,reset-gpio = <&gpio2 RK_PD1 GPIO_ACTIVE_HIGH>;
 	snps,reset-active-high;
-	snps,reset-delays-us = <0 1000000 2000000>;
 	tx_delay = <0x2a>;
 	rx_delay = <0x2a>;
 	fixed-link = <1 1 1000 1 1>;
@@ -90,17 +78,22 @@ cat <<EOF > target/linux/rockchip/files/arch/arm64/boot/dts/rockchip/rk3568-seew
 	status = "okay";
 };
 
+&mdio1 {
+	rgmii_phy1: ethernet-phy@1 {
+		compatible = "ethernet-phy-ieee802.3-c22";
+		reg = <0x1>;
+	};
+};
+
 &i2c0 {
 	status = "okay";
 	vdd_cpu: regulator@1c {
 		compatible = "tcs,tcs4525";
 		reg = <0x1c>;
-		regulator-name = "vdd_cpu";
 		regulator-always-on;
 		regulator-boot-on;
 		regulator-min-microvolt = <800000>;
 		regulator-max-microvolt = <1150000>;
-		regulator-ramp-delay = <2300>;
 		vin-supply = <&vcc5v0_sys>;
 	};
 };
@@ -116,11 +109,9 @@ cat <<EOF > target/linux/rockchip/files/arch/arm64/boot/dts/rockchip/rk3568-seew
 
 &usb_host1_xhci { status = "okay"; };
 &sata2 { status = "okay"; };
-&usb2phy0_host { status = "okay"; };
-&usb2phy1_host { status = "okay"; };
 EOF
 
-# 3. 修改 Makefile，注入 Seewo SV21 型号定义
+# 3. 修改 Makefile
 sed -i '/define Device\/rk3568/i \
 define Device/seewo_sv21\
   $(Device/rk3568)\
