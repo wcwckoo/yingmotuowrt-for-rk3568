@@ -3,7 +3,7 @@
 # 1. 创建内核设备树目录
 mkdir -p target/linux/rockchip/files/arch/arm64/boot/dts/rockchip/
 
-# 2. 写入 Seewo SV21 专属设备树 (补全了缺失的 mdio 节点)
+# 2. 写入 Seewo SV21 专属设备树 (已补全 PHY 标签定义)
 cat <<EOF > target/linux/rockchip/files/arch/arm64/boot/dts/rockchip/rk3568-seewo-sv21.dts
 // SPDX-License-Identifier: (GPL-2.0+ OR MIT)
 /dts-v1/;
@@ -111,7 +111,7 @@ cat <<EOF > target/linux/rockchip/files/arch/arm64/boot/dts/rockchip/rk3568-seew
 &sata2 { status = "okay"; };
 EOF
 
-# 3. 修改 Makefile
+# 3. 修改 Makefile，注入 Seewo SV21 型号定义
 sed -i '/define Device\/rk3568/i \
 define Device/seewo_sv21\
   $(Device/rk3568)\
