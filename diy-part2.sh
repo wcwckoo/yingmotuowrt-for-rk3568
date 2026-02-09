@@ -1,20 +1,133 @@
 #!/bin/bash
-#
-# https://github.com/P3TERX/Actions-OpenWrt
-# File name: diy-part2.sh
-# Description: OpenWrt DIY script part 2 (After Update feeds)
-#
-# Copyright (c) 2019-2024 P3TERX <https://p3terx.com>
-#
-# This is free software, licensed under the MIT License.
-# See /LICENSE for more information.
-#
 
-# Modify default IP
-#sed -i 's/192.168.1.1/192.168.50.5/g' package/base-files/files/bin/config_generate
+# 1. 创建内核设备树目录
+mkdir -p target/linux/rockchip/files/arch/arm64/boot/dts/rockchip/
 
-# Modify default theme
-#sed -i 's/luci-theme-bootstrap/luci-theme-argon/g' feeds/luci/collections/luci/Makefile
+# 2. 写入 Seewo SV21 专属设备树 (增加完整 OPP 频率表，确保 2.0GHz 跑满)
+cat <<EOF > target/linux/rockchip/files/arch/arm64/boot/dts/rockchip/rk3568-seewo-sv21.dts
+// SPDX-License-Identifier: (GPL-2.0+ OR MIT)
+/dts-v1/;
+#include <dt-bindings/gpio/gpio.h>
+#include <dt-bindings/leds/common.h>
+#include <dt-bindings/pinctrl/rockchip.h>
+#include <dt-bindings/soc/rockchip,vop2.h>
+#include "rk3568.dtsi"
 
-# Modify hostname
-#sed -i 's/OpenWrt/P3TERX-Router/g' package/base-files/files/bin/config_generate
+/ {
+	model = "Seawo SV21 Model A";
+	compatible = "seawo,sv21", "rockchip,rk3568";
+
+	aliases {
+		ethernet0 = &gmac0;
+		ethernet1 = &gmac1;
+		mmc0 = &sdmmc0;
+		mmc1 = &sdhci;
+	};
+
+	chosen: chosen {
+		stdout-path = "serial2:1500000n8";
+	};
+
+	/* 强制定义频率表，防止内核锁频 */
+	cpu0_opp_table: opp-table-0 {
+		compatible = "operating-points-v2";
+		opp-shared;
+		opp-408000000 { opp-hz = /bits/ 64 <408000000>; opp-microvolt = <825000 825000 1150000>; };
+		opp-600000000 { opp-hz = /bits/ 64 <600000000>; opp-microvolt = <825000 825000 1150000>; };
+		opp-816000000 { opp-hz = /bits/ 64 <816000000>; opp-microvolt = <825000 825000 1150000>; };
+		opp-1008000000 { opp-hz = /bits/ 64 <1008000000>; opp-microvolt = <825000 825000 1150000>; };
+		opp-1200000000 { opp-hz = /bits/ 64 <1200000000>; opp-microvolt = <825000 825000 1150000>; };
+		opp-1416000000 { opp-hz = /bits/ 64 <1416000000>; opp-microvolt = <900000 900000 1150000>; };
+		opp-1608000000 { opp-hz = /bits/ 64 <1608000000>; opp-microvolt = <1000000 1000000 1150000>; };
+		opp-1800000000 { opp-hz = /bits/ 64 <1800000000>; opp-microvolt = <1100000 1100000 1150000>; };
+		opp-1992000000 { opp-hz = /bits/ 64 <1992000000>; opp-microvolt = <1150000 1150000 1150000>; };
+	};
+
+	vcc12v_dcin: vcc12v-dcin {
+		compatible = "regulator-fixed";
+		regulator-name = "vcc12v_dcin";
+		regulator-always-on;
+		regulator-boot-on;
+	};
+
+	vcc3v3_sys: vcc3v3-sys {
+		compatible = "regulator-fixed";
+		regulator-name = "vcc3v3_sys";
+		regulator-always-on;
+		regulator-boot-on;
+		vin-supply = <&vcc12v_dcin>;
+	};
+
+	vcc5v0_sys: vcc5v0-sys {
+		compatible = "regulator-fixed";
+		regulator-name = "vcc5v0_sys";
+		regulator-always-on;
+		regulator-boot-on;
+		vin-supply = <&vcc12v_dcin>;
+	};
+};
+
+&cpu0 { cpu-supply = <&vdd_cpu>; operating-points-v2 = <&cpu0_opp_table>; };
+&cpu1 { cpu-supply = <&vdd_cpu>; operating-points-v2 = <&cpu0_opp_table>; };
+&cpu2 { cpu-supply = <&vdd_cpu>; operating-points-v2 = <&cpu0_opp_table>; };
+&cpu3 { cpu-supply = <&vdd_cpu>; operating-points-v2 = <&cpu0_opp_table>; };
+
+&gmac1 {
+	assigned-clocks = <&cru SCLK_GMAC1_RX_TX>, <&cru SCLK_GMAC1>;
+	assigned-clock-parents = <&cru SCLK_GMAC1_RGMII_SPEED>;
+	assigned-clock-rates = <0>, <125000000>;
+	clock_in_out = "output";
+	phy-mode = "rgmii";
+	pinctrl-names = "default";
+	pinctrl-0 = <&gmac1m1_miim &gmac1m1_tx_bus2 &gmac1m1_rx_bus2 &gmac1m1_rgmii_clk &gmac1m1_rgmii_bus>;
+	snps,reset-gpio = <&gpio2 RK_PD1 GPIO_ACTIVE_HIGH>;
+	snps,reset-active-high;
+	snps,reset-delays-us = <0 1000000 2000000>;
+	tx_delay = <0x2a>;
+	rx_delay = <0x2a>;
+	fixed-link = <1 1 1000 1 1>;
+	phy-handle = <&rgmii_phy1>;
+	status = "okay";
+};
+
+&i2c0 {
+	status = "okay";
+	vdd_cpu: regulator@1c {
+		compatible = "tcs,tcs4525";
+		reg = <0x1c>;
+		regulator-name = "vdd_cpu";
+		regulator-always-on;
+		regulator-boot-on;
+		regulator-min-microvolt = <800000>;
+		regulator-max-microvolt = <1150000>;
+		regulator-ramp-delay = <2300>;
+		vin-supply = <&vcc5v0_sys>;
+	};
+};
+
+&sdhci {
+	bus-width = <8>;
+	max-frequency = <200000000>;
+	non-removable;
+	pinctrl-names = "default";
+	pinctrl-0 = <&emmc_bus8 &emmc_clk &emmc_cmd &emmc_datastrobe>;
+	status = "okay";
+};
+
+&usb_host1_xhci { status = "okay"; };
+&sata2 { status = "okay"; };
+&usb2phy0_host { status = "okay"; };
+&usb2phy1_host { status = "okay"; };
+EOF
+
+# 3. 修改 Makefile，注入 Seewo SV21 型号定义
+sed -i '/define Device\/rk3568/i \
+define Device/seewo_sv21\
+  $(Device/rk3568)\
+  DEVICE_VENDOR := Seewo\
+  DEVICE_MODEL := SV21 (RK3568B2)\
+  DEVICE_DTS := rk3568-seewo-sv21\
+  DEVICE_PACKAGES := kmod-usb-net-rtl8152 luci-app-cpufreq kmod-ata-ahci-rockchip\
+endef\
+TARGET_DEVICES += seewo_sv21\
+' target/linux/rockchip/image/armv8.mk
